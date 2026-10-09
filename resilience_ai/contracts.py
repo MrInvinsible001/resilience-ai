@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from types import MappingProxyType
+from typing import Any, Mapping, Protocol, runtime_checkable
 
 
 class ScenarioMode(str, Enum):
@@ -79,7 +80,13 @@ class DemandForecast:
     std_demand_per_dc: float
     distribution_centers: tuple[str, ...]
     horizon_days: int
-    daily_expected_demand: dict[int, float] = field(default_factory=dict)
+    daily_expected_demand: Mapping[int, float] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        copied = dict(self.daily_expected_demand) if self.daily_expected_demand is not None else {}
+        object.__setattr__(self, "daily_expected_demand", MappingProxyType(copied))
+        if isinstance(self.distribution_centers, list):
+            object.__setattr__(self, "distribution_centers", tuple(self.distribution_centers))
 
 
 @dataclass(frozen=True)
@@ -93,7 +100,15 @@ class SupplierInfo:
     unit_purchase_cost: float
     unit_transport_cost: float
     expediting_surcharge: float = 50.00
-    future_daily_capacities: dict[int, int] | None = None
+    future_daily_capacities: Mapping[int, int] | None = None
+
+    def __post_init__(self) -> None:
+        if self.future_daily_capacities is not None:
+            object.__setattr__(
+                self,
+                "future_daily_capacities",
+                MappingProxyType(dict(self.future_daily_capacities)),
+            )
 
     @property
     def transport_cost_per_unit(self) -> float:
@@ -146,7 +161,7 @@ class PlanningObservation:
     inventory: InventoryState
     current_day_demand: int
     forecast: DemandForecast
-    suppliers: dict[str, SupplierInfo]
+    suppliers: Mapping[str, SupplierInfo]
     disruptions: tuple[DisruptionNotice, ...] = ()
     plant_capacity: int = 300
 
@@ -157,7 +172,7 @@ class PlanningObservation:
         inventory: InventoryState,
         current_day_demand: int,
         forecast: DemandForecast,
-        suppliers: dict[str, SupplierInfo],
+        suppliers: Mapping[str, SupplierInfo],
         disruptions: list[DisruptionNotice] | tuple[DisruptionNotice, ...] = (),
         plant_capacity: int = 300,
     ) -> None:
@@ -166,7 +181,7 @@ class PlanningObservation:
         object.__setattr__(self, "inventory", inventory)
         object.__setattr__(self, "current_day_demand", current_day_demand)
         object.__setattr__(self, "forecast", forecast)
-        object.__setattr__(self, "suppliers", dict(suppliers))
+        object.__setattr__(self, "suppliers", MappingProxyType(dict(suppliers)))
         disruptions_tuple = tuple(disruptions)
         object.__setattr__(self, "disruptions", disruptions_tuple)
         object.__setattr__(self, "plant_capacity", plant_capacity)

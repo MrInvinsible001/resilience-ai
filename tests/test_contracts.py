@@ -440,3 +440,150 @@ def test_fairness_known_shutdown_allows_advance_disclosure():
     assert len(obs_with_notice.disruptions) == 1
     assert obs_with_notice.disruptions[0].is_active(10) is True
     assert obs_with_notice.suppliers["Supplier_Critical"].future_daily_capacities[10] == 0
+
+
+# ---------------------------------------------------------------------------
+# 5. Mapping immutability and defensive copy checks
+# ---------------------------------------------------------------------------
+
+
+def test_demand_forecast_daily_expected_demand_defensive_copy():
+    """External mutations to the input dictionary must not leak into DemandForecast."""
+    external_dict = {1: 240.0, 2: 250.0}
+    forecast = DemandForecast(
+        mean_daily_demand=240.0,
+        std_daily_demand=20.8,
+        mean_demand_per_dc=80.0,
+        std_demand_per_dc=12.0,
+        distribution_centers=("DC_1", "DC_2", "DC_3"),
+        horizon_days=28,
+        daily_expected_demand=external_dict,
+    )
+
+    external_dict[1] = 999.0
+    external_dict[3] = 300.0
+
+    assert forecast.daily_expected_demand[1] == 240.0
+    assert 3 not in forecast.daily_expected_demand
+
+
+def test_demand_forecast_daily_expected_demand_read_only():
+    """Exposed daily_expected_demand mapping must reject modifications."""
+    forecast = DemandForecast(
+        mean_daily_demand=240.0,
+        std_daily_demand=20.8,
+        mean_demand_per_dc=80.0,
+        std_demand_per_dc=12.0,
+        distribution_centers=("DC_1", "DC_2", "DC_3"),
+        horizon_days=28,
+        daily_expected_demand={1: 240.0},
+    )
+
+    with pytest.raises(TypeError):
+        forecast.daily_expected_demand[1] = 999.0  # type: ignore[index]
+
+    with pytest.raises(TypeError):
+        forecast.daily_expected_demand[2] = 100.0  # type: ignore[index]
+
+
+def test_supplier_info_future_capacities_defensive_copy():
+    """External mutations to future_daily_capacities must not affect SupplierInfo."""
+    external_capacities = {10: 220, 11: 220}
+    supplier = SupplierInfo(
+        supplier_id="Supplier_Test",
+        lead_time_days=2,
+        current_daily_capacity=220,
+        normal_daily_capacity=220,
+        unit_purchase_cost=10.0,
+        unit_transport_cost=0.50,
+        future_daily_capacities=external_capacities,
+    )
+
+    external_capacities[10] = 0
+    external_capacities[12] = 50
+
+    assert supplier.future_daily_capacities is not None
+    assert supplier.future_daily_capacities[10] == 220
+    assert 12 not in supplier.future_daily_capacities
+
+
+def test_supplier_info_future_capacities_read_only():
+    """Exposed future_daily_capacities mapping must reject in-place modifications."""
+    supplier = SupplierInfo(
+        supplier_id="Supplier_Test",
+        lead_time_days=2,
+        current_daily_capacity=220,
+        normal_daily_capacity=220,
+        unit_purchase_cost=10.0,
+        unit_transport_cost=0.50,
+        future_daily_capacities={10: 220},
+    )
+
+    with pytest.raises(TypeError):
+        supplier.future_daily_capacities[10] = 0  # type: ignore[index]
+
+
+def test_planning_observation_suppliers_defensive_copy():
+    """External mutations to the suppliers dictionary must not affect PlanningObservation."""
+    supp1 = SupplierInfo(
+        supplier_id="Supplier_Critical",
+        lead_time_days=2,
+        current_daily_capacity=220,
+        normal_daily_capacity=220,
+        unit_purchase_cost=10.0,
+        unit_transport_cost=0.50,
+    )
+    supp2 = SupplierInfo(
+        supplier_id="Supplier_Critical",
+        lead_time_days=2,
+        current_daily_capacity=0,
+        normal_daily_capacity=220,
+        unit_purchase_cost=10.0,
+        unit_transport_cost=0.50,
+    )
+
+    external_suppliers = {"Supplier_Critical": supp1}
+    obs = PlanningObservation(
+        day=1,
+        scenario_mode=ScenarioMode.KNOWN_SHUTDOWN,
+        inventory=InventoryState(day=1, finished_goods=0, components=0, backlog=0),
+        current_day_demand=240,
+        forecast=DemandForecast(
+            mean_daily_demand=240.0,
+            std_daily_demand=20.8,
+            mean_demand_per_dc=80.0,
+            std_demand_per_dc=12.0,
+            distribution_centers=("DC_1", "DC_2", "DC_3"),
+            horizon_days=28,
+        ),
+        suppliers=external_suppliers,
+    )
+
+    external_suppliers["Supplier_Critical"] = supp2
+    external_suppliers["Supplier_New"] = supp2
+
+    assert obs.suppliers["Supplier_Critical"] is supp1
+    assert "Supplier_New" not in obs.suppliers
+
+
+def test_planning_observation_suppliers_read_only():
+    """Exposed suppliers mapping on PlanningObservation must reject modifications."""
+    obs = create_sample_observation()
+
+    new_supp = SupplierInfo(
+        supplier_id="Supplier_Hacked",
+        lead_time_days=1,
+        current_daily_capacity=999,
+        normal_daily_capacity=999,
+        unit_purchase_cost=1.0,
+        unit_transport_cost=0.1,
+    )
+
+    with pytest.raises(TypeError):
+        obs.suppliers["Supplier_Critical"] = new_supp  # type: ignore[index]
+
+    with pytest.raises(TypeError):
+        obs.suppliers["Supplier_Hacked"] = new_supp  # type: ignore[index]
+
+    with pytest.raises(TypeError):
+        del obs.suppliers["Supplier_Critical"]  # type: ignore[misc]
