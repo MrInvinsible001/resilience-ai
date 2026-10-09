@@ -289,6 +289,19 @@ def build_forecast(config: SimulationConfig) -> DemandForecast:
     )
 
 
+def generate_daily_demands(config: SimulationConfig) -> dict[int, int]:
+    """Generate the reproducible aggregate evaluation demand sequence."""
+    eval_seq = np.random.SeedSequence(config.seed).spawn(2)[1]
+    eval_rng = np.random.default_rng(eval_seq)
+    return {
+        day: sum(
+            max(0, int(eval_rng.normal(config.demand_mean_per_dc, config.demand_std_per_dc)))
+            for _ in config.distribution_centers
+        )
+        for day in range(1, config.horizon_days + 1)
+    }
+
+
 def build_supplier_info(
     config: SimulationConfig,
     current_day: int,
@@ -597,15 +610,7 @@ class Simulator:
         if self.daily_demands is not None:
             daily_demands = self.daily_demands
         else:
-            eval_seq = np.random.SeedSequence(config.seed).spawn(2)[1]
-            eval_rng = np.random.default_rng(eval_seq)
-            daily_demands = {}
-            for d in range(1, config.horizon_days + 1):
-                d_val = sum(
-                    max(0, int(eval_rng.normal(config.demand_mean_per_dc, config.demand_std_per_dc)))
-                    for _ in config.distribution_centers
-                )
-                daily_demands[d] = d_val
+            daily_demands = generate_daily_demands(config)
 
         forecast = build_forecast(config)
 

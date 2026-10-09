@@ -23,12 +23,15 @@ from resilience_ai.simulator import (
     SimulationStepLog,
     Simulator,
     build_forecast,
+    generate_daily_demands,
     run_burn_in,
     simulate,
 )
+from resilience_ai.evaluation import BenchmarkReport, run_benchmark
 
 __all__ = [
     "BaselineReactiveStrategy",
+    "BenchmarkReport",
     "ConstraintViolation",
     "DemandForecast",
     "DisruptionNotice",
@@ -46,8 +49,10 @@ __all__ = [
     "SupplierInfo",
     "ViolationCode",
     "build_forecast",
+    "generate_daily_demands",
     "is_valid_decision",
     "run_burn_in",
+    "run_benchmark",
     "simulate",
     "validate_decision",
 ]
