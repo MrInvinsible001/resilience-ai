@@ -14,7 +14,10 @@ SEED = 42
 EXPECTED_FILES = [
     "demand.csv",
     "supplier_capacity.csv",
+    "supplier_capacity_baseline.csv",
+    "disruption_events.json",
     "network_params.csv",
+    "initial_conditions.json",
     "production_orders.csv",
     "metadata.json",
 ]
@@ -68,7 +71,7 @@ def test_non_negative_quantities():
     with tempfile.TemporaryDirectory() as tmpdir:
         out = Path(tmpdir)
         generate(SEED, out)
-        for fname in ["demand.csv", "supplier_capacity.csv"]:
+        for fname in ["demand.csv", "supplier_capacity.csv", "supplier_capacity_baseline.csv"]:
             df = pd.read_csv(out / fname)
             nums = df.select_dtypes(include="number")
             assert (nums >= 0).all().all(), f"Negative values found in {fname}"

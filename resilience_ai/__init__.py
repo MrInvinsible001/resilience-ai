@@ -16,8 +16,19 @@ from resilience_ai.contracts import (
     is_valid_decision,
     validate_decision,
 )
+from resilience_ai.simulator import (
+    BaselineReactiveStrategy,
+    SimulationConfig,
+    SimulationResult,
+    SimulationStepLog,
+    Simulator,
+    build_forecast,
+    run_burn_in,
+    simulate,
+)
 
 __all__ = [
+    "BaselineReactiveStrategy",
     "ConstraintViolation",
     "DemandForecast",
     "DisruptionNotice",
@@ -27,9 +38,16 @@ __all__ = [
     "ProcurementDecision",
     "ScenarioMode",
     "Shipment",
+    "SimulationConfig",
+    "SimulationResult",
+    "SimulationStepLog",
+    "Simulator",
     "Strategy",
     "SupplierInfo",
     "ViolationCode",
+    "build_forecast",
     "is_valid_decision",
+    "run_burn_in",
+    "simulate",
     "validate_decision",
 ]

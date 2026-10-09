@@ -321,8 +321,12 @@ def validate_decision(
                 )
             )
 
+        # Supplier IDs are strategy-controlled runtime input. Only strings may
+        # safely participate in set and mapping membership operations.
+        is_supplier_id_valid_type = isinstance(order.supplier_id, str)
+
         # 2. Check duplicate supplier orders
-        if order.supplier_id in seen_suppliers:
+        if is_supplier_id_valid_type and order.supplier_id in seen_suppliers:
             violations.append(
                 ConstraintViolation(
                     code=ViolationCode.DUPLICATE_ORDER.value,
@@ -334,11 +338,11 @@ def validate_decision(
                     attempted_quantity=order.quantity,
                 )
             )
-        else:
+        elif is_supplier_id_valid_type:
             seen_suppliers.add(order.supplier_id)
 
         # 3. Check unknown supplier
-        if order.supplier_id not in observation.suppliers:
+        if not is_supplier_id_valid_type or order.supplier_id not in observation.suppliers:
             violations.append(
                 ConstraintViolation(
                     code=ViolationCode.UNKNOWN_SUPPLIER.value,

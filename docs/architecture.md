@@ -149,6 +149,8 @@ The validator checks:
 * Test the engine by plugging in a dummy mock strategy (e.g. zero-order or fixed-fraction).
 * Verify accounting conservation invariant:
   $$\sum_{d=1}^{28} P_d + B_{28} = \sum_{d=1}^{28} D_d + I_{28} - I_0$$
+* Verify component conservation invariant:
+  $$\sum \text{Arrivals} = \sum P_d + C_{28} - C_0$$
 
 ### For Person 2 (Strategies & Agents)
 * Implement `Strategy` by importing types from `resilience_ai.contracts`.
@@ -158,4 +160,20 @@ The validator checks:
   - Behavior during Day 10–16 when critical supplier capacity is 0.
   - Recovery behavior on Day 17+ when alternate orders are in-transit.
 * Ensure all strategy outputs satisfy `validate_decision(decision, obs) == []`.
+
+---
+
+## 6. Parameter Rationales & Information Boundaries
+
+### Steady-State Buffer & Replenishment Parameters
+* **Finished-Goods Buffer (100 units)**: Sized to ~42% of aggregate mean daily demand ($240$ units/day), providing ~10 hours of operating safety stock at the plant. This absorbs day-to-day stochastic demand variance ($\sigma=12$ per DC) without triggering artificial backlogs during normal operations.
+* **Replenishment Target Multiplier (1.5x)**: Sets component inventory target to $1.5 \times D_d$ ($\approx 360$ units) during steady-state operations. Because the critical supplier lead time is 2 days and the alternate is 3 days, a 1.5x multiplier establishes sufficient pipeline coverage to satisfy demand during in-transit transit times.
+* **Supplier Cost Differential (\$10.00 vs \$12.00)**: The alternate supplier charges a 20% price premium (\$12.00 vs \$10.00 base unit cost). This reflects reserve capacity premiums and less favorable contract terms, creating an authentic economic tradeoff between proactive/emergency diversification and procurement cost minimization.
+
+### Ground-Truth vs. Strategy Observation Boundary
+* **Ground-Truth Physical State**: The simulator executes against objective ground-truth realities: the critical supplier's physical capacity is zero on evaluation days 10–16 regardless of scenario mode.
+* **Observation Boundary & Information Disclosure**:
+  - In `KNOWN_SHUTDOWN`, the disruption schedule is disclosed to strategies on Day 1 via `DisruptionNotice` and zeroed entries in `SupplierInfo.future_daily_capacities`.
+  - In `SURPRISE_SHUTDOWN`, the disruption is concealed until Day 10. Prior to Day 10, observations contain no disruption notices and report full normal capacity ($220$) across all future days. On Day 10, the surprise notice is announced and future capacities reflect the shutdown.
+  - In all scenarios, strategies receive only statistical demand forecasts, never future realized draws, strictly enforcing experimental fairness.
 
