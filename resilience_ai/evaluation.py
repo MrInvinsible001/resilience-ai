@@ -69,6 +69,25 @@ TRAJECTORY_COLUMNS = [
     "constraint_violation_count",
 ]
 
+AGGREGATE_METRICS = (
+    "same_day_fill_rate",
+    "demand_satisfied_fraction",
+    "ending_backlog",
+    "peak_backlog",
+    "cumulative_backlog_unit_days",
+    "recovery_time_days",
+    "procurement_expenditure_usd",
+    "total_constraint_violations",
+)
+
+AGGREGATE_COLUMNS = [
+    "strategy",
+    "scenario_mode",
+    "trial_count",
+    *[f"{metric}_mean" for metric in AGGREGATE_METRICS],
+    *[f"{metric}_std" for metric in AGGREGATE_METRICS],
+]
+
 
 @dataclass(frozen=True)
 class BenchmarkReport:
@@ -76,6 +95,26 @@ class BenchmarkReport:
 
     summary: pd.DataFrame
     daily_trajectories: pd.DataFrame
+
+    @property
+    def aggregate_metrics(self) -> pd.DataFrame:
+        """Aggregate outcome metrics across seeds, excluding runtime."""
+        grouped = self.summary.groupby(
+            ["strategy", "scenario_mode"], sort=False, dropna=False
+        )
+        rows: list[dict[str, object]] = []
+        for (strategy, scenario_mode), group in grouped:
+            row: dict[str, object] = {
+                "strategy": strategy,
+                "scenario_mode": scenario_mode,
+                "trial_count": len(group),
+            }
+            for metric in AGGREGATE_METRICS:
+                values = group[metric]
+                row[f"{metric}_mean"] = values.mean()
+                row[f"{metric}_std"] = values.std(ddof=0)
+            rows.append(row)
+        return pd.DataFrame(rows, columns=AGGREGATE_COLUMNS)
 
 
 def _order_quantities(step: SimulationStepLog, config: SimulationConfig) -> tuple[int, int]:
