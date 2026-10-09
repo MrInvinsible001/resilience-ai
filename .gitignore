@@ -10,4 +10,4 @@ build/
 *.sqlite3
 *.log
 data/
-
+results/

@@ -29,8 +29,26 @@ Run the baseline strategy under both canonical scenarios:
 python scripts/run_evaluation.py --seed 42 --output results/evaluation
 ```
 
-The command writes `summary_metrics.csv` and `daily_trajectories.csv` under
-the output directory. It never overwrites files under `data/`.
+The command writes `summary_metrics.csv`, `daily_trajectories.csv`, and
+`aggregate_metrics.csv` under the output directory. It never overwrites files
+under `data/`. The default when no seed option is supplied is equivalent to
+`--seed 42`.
+
+Run multiple seeds with:
+
+```bash
+python scripts/run_evaluation.py --seeds 42 43 44 --output results/evaluation
+```
+
+`--seed` and `--seeds` are mutually exclusive.
+
+The three output files are:
+
+- `summary_metrics.csv`: one row per strategy, scenario, and seed.
+- `daily_trajectories.csv`: one row per strategy, scenario, seed, and day.
+- `aggregate_metrics.csv`: one row per strategy and scenario, with
+  `trial_count` plus mean and standard deviation columns for the outcome
+  metrics listed below. Runtime is intentionally excluded because it is noisy.
 
 ## Metric definitions
 
@@ -59,6 +77,11 @@ the output directory. It never overwrites files under `data/`.
 - **Accounting invariants** pass only when every simulator invariant is true.
 - **Runtime** is wall-clock simulator runtime in milliseconds and is not a
   deterministic performance score.
+- **Aggregate recovery time** uses the mean and standard deviation of the
+  available (non-missing) recovery times. Missing values are ignored for these
+  two statistics; if every trial is missing, both aggregate values are
+  missing. `trial_count` still counts all trials in the group. Aggregate
+  standard deviations use the population definition (`ddof=0`).
 
 ## Fairness and reproducibility
 

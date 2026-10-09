@@ -12,6 +12,7 @@ from resilience_ai.contracts import (
     ScenarioMode,
 )
 from resilience_ai.evaluation import (
+    AGGREGATE_COLUMNS,
     SUMMARY_COLUMNS,
     TRAJECTORY_COLUMNS,
     _recovery_time,
@@ -178,5 +179,105 @@ def test_cli_writes_evaluation_outputs(tmp_path):
     assert "summary_metrics.csv" in completed.stdout
     assert (output / "summary_metrics.csv").is_file()
     assert (output / "daily_trajectories.csv").is_file()
+    assert (output / "aggregate_metrics.csv").is_file()
     assert len(pd.read_csv(output / "summary_metrics.csv")) == 2
     assert len(pd.read_csv(output / "daily_trajectories.csv")) == 56
+    assert len(pd.read_csv(output / "aggregate_metrics.csv")) == 2
+
+
+def test_aggregate_metrics_calculate_means_stds_and_trial_counts():
+    report = run_benchmark(
+        {"no_order": NoOrderStrategy},
+        SimulationConfig(horizon_days=28),
+        seeds=(42, 43, 44),
+    )
+    aggregate = report.aggregate_metrics
+    assert list(aggregate.columns) == AGGREGATE_COLUMNS
+    assert len(aggregate) == 2
+    assert set(aggregate["trial_count"]) == {3}
+
+    known_trials = report.summary[
+        report.summary["scenario_mode"] == ScenarioMode.KNOWN_SHUTDOWN.value
+    ]
+    known_aggregate = aggregate[
+        aggregate["scenario_mode"] == ScenarioMode.KNOWN_SHUTDOWN.value
+    ].iloc[0]
+    assert known_aggregate["same_day_fill_rate_mean"] == known_trials[
+        "same_day_fill_rate"
+    ].mean()
+    assert known_aggregate["same_day_fill_rate_std"] == known_trials[
+        "same_day_fill_rate"
+    ].std(ddof=0)
+
+
+def test_aggregate_metrics_ignore_missing_recovery_times():
+    report = run_benchmark(
+        {"no_order": NoOrderStrategy},
+        SimulationConfig(horizon_days=28),
+        seeds=(42, 43),
+    )
+    report.summary.loc[0, "recovery_time_days"] = None
+    report.summary.loc[2, "recovery_time_days"] = 5
+    aggregate = report.aggregate_metrics
+    known_aggregate = aggregate[
+        aggregate["scenario_mode"] == ScenarioMode.KNOWN_SHUTDOWN.value
+    ].iloc[0]
+    known_trials = report.summary[
+        report.summary["scenario_mode"] == ScenarioMode.KNOWN_SHUTDOWN.value
+    ]
+    assert known_aggregate["trial_count"] == 2
+    assert known_aggregate["recovery_time_days_mean"] == known_trials[
+        "recovery_time_days"
+    ].mean()
+    assert known_aggregate["recovery_time_days_std"] == known_trials[
+        "recovery_time_days"
+    ].std(ddof=0)
+
+
+def test_cli_seed_defaults_and_multi_seed_trial_counts(tmp_path):
+    default_output = tmp_path / "default"
+    subprocess.run(
+        [sys.executable, "scripts/run_evaluation.py", "--output", str(default_output)],
+        check=True,
+    )
+    default_summary = pd.read_csv(default_output / "summary_metrics.csv")
+    assert default_summary["seed"].tolist() == [42, 42]
+
+    multi_output = tmp_path / "multi"
+    subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_evaluation.py",
+            "--seeds",
+            "42",
+            "43",
+            "44",
+            "--output",
+            str(multi_output),
+        ],
+        check=True,
+    )
+    multi_summary = pd.read_csv(multi_output / "summary_metrics.csv")
+    aggregate = pd.read_csv(multi_output / "aggregate_metrics.csv")
+    assert len(multi_summary) == 6
+    assert set(multi_summary["seed"]) == {42, 43, 44}
+    assert set(aggregate["trial_count"]) == {3}
+
+
+def test_cli_rejects_seed_and_seeds_together(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_evaluation.py",
+            "--seed",
+            "42",
+            "--seeds",
+            "43",
+            "--output",
+            str(tmp_path / "invalid"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode != 0
+    assert "not allowed with argument" in completed.stderr
