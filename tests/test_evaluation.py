@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 import subprocess
 import sys
@@ -23,6 +22,7 @@ from resilience_ai.simulator import (
     SimulationConfig,
     generate_daily_demands,
 )
+from scripts.generate_dataset import generate
 
 
 class NoOrderStrategy:
@@ -43,10 +43,11 @@ def _result_with_backlogs(backlogs: list[int]):
     return SimpleNamespace(config=config, steps=steps)
 
 
-def test_generate_daily_demands_matches_dataset_seed_42():
+def test_generate_daily_demands_matches_dataset_seed_42(tmp_path):
     config = SimulationConfig(seed=42)
     generated = generate_daily_demands(config)
-    demand = pd.read_csv(Path("data") / "demand.csv")
+    generate(seed=42, output_dir=tmp_path)
+    demand = pd.read_csv(tmp_path / "demand.csv")
     expected = demand.groupby("day")["demand"].sum().to_dict()
     assert generated == expected
 
