@@ -72,6 +72,13 @@ The three output files are:
   holding, shortage, backlog, production, and other operating penalties.
 - **Order volatility** is the sum of absolute changes in total accepted order
   quantity, starting from zero before day 1.
+- **Inventory days** is end-of-day finished goods plus on-hand components divided
+  by configured mean aggregate daily demand. In-transit inventory is excluded
+  from this point-in-time metric; its contribution is represented only when the
+  simulator records its actual arrival day.
+- **Recommendation stability** is the fraction of daily order transitions whose
+  total accepted quantity is unchanged, including the transition from zero
+  orders before day 1. It ranges from 0 to 1; it is not a service or cost score.
 - **Constraint violations** count all validator violations; capacity violations
   count only `CAPACITY_EXCEEDED`.
 - **Accounting invariants** pass only when every simulator invariant is true.

@@ -13,9 +13,12 @@ from resilience_ai.dashboard.app import (
     get_strategy_instance,
     main,
     prepare_comparison_metrics,
+    run_dashboard_benchmark,
     run_dashboard_coordinator,
 )
 from resilience_ai.dashboard.mock_data import create_sample_observation
+from resilience_ai.contracts import ScenarioMode
+from resilience_ai.simulator import SimulationConfig
 from resilience_ai.strategies.ortools_strategy import OrToolsStrategy
 from resilience_ai.strategies.rule_based import RuleBasedStrategy
 
@@ -82,6 +85,46 @@ def test_check_ortools_availability_boolean():
     """Verify check_ortools_availability returns a boolean reflecting environment state."""
     avail = check_ortools_availability()
     assert isinstance(avail, bool)
+
+
+@pytest.mark.parametrize(
+    "scenario_mode",
+    [ScenarioMode.KNOWN_SHUTDOWN, ScenarioMode.SURPRISE_SHUTDOWN],
+)
+def test_dashboard_benchmark_uses_real_simulator_for_each_scenario(scenario_mode):
+    """Verify the dashboard path returns the real 28-day evaluation tables."""
+    report = run_dashboard_benchmark(
+        "Rule-Based",
+        scenario_mode,
+        seed=42,
+        config=SimulationConfig(),
+    )
+
+    assert len(report.summary) == 1
+    assert len(report.daily_trajectories) == 28
+    assert set(report.daily_trajectories["day"]) == set(range(1, 29))
+    assert report.summary.iloc[0]["scenario_mode"] == scenario_mode.value
+    assert report.summary.iloc[0]["seed"] == 42
+    assert bool(report.summary.iloc[0]["accounting_invariants_pass"]) is True
+
+
+def test_dashboard_compare_uses_same_real_trial_for_both_strategies():
+    """Verify comparison mode shares seed, demand, scenario, and horizon."""
+    report = run_dashboard_benchmark(
+        "Compare Both",
+        ScenarioMode.SURPRISE_SHUTDOWN,
+        seed=7,
+    )
+
+    assert set(report.summary["strategy"]) == {"Rule-Based", "OR-Tools"}
+    assert set(report.summary["seed"]) == {7}
+    assert set(report.summary["scenario_mode"]) == {ScenarioMode.SURPRISE_SHUTDOWN.value}
+    assert len(report.daily_trajectories) == 56
+
+    demand_by_strategy = report.daily_trajectories.pivot(
+        index="day", columns="strategy", values="realized_demand"
+    )
+    assert demand_by_strategy["Rule-Based"].equals(demand_by_strategy["OR-Tools"])
 
 
 def test_streamlit_missing_raises_runtime_error():

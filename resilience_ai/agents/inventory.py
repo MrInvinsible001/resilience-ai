@@ -24,6 +24,8 @@ class InventorySignal:
     target_coverage_days: float
     required_component_target: float
     component_shortfall: int
+    time_phased_component_coverage: int = 0
+    pipeline_due_within_target: int = 0
 
 
 class InventoryAgent:
@@ -72,13 +74,24 @@ class InventoryAgent:
         required_component_target = float(
             target_coverage_days * demand_signal.expected_daily_demand
         )
+        target_end_day = obs.day + int(target_coverage_days)
+        pipeline_due_within_target = sum(
+            s.quantity
+            for s in obs.inventory.in_transit
+            if obs.day < s.arrival_day <= target_end_day
+        )
+        time_phased_component_coverage = (
+            on_hand_components + pipeline_due_within_target
+        )
 
         # Backlog heuristic: fold backlog into target before max(0, ...) boundary.
         # Shortfall = max(0, required_target + backlog - total_coverage).
         component_shortfall = int(
             max(
                 0.0,
-                required_component_target + obs.inventory.backlog - total_component_coverage,
+                required_component_target
+                + obs.inventory.backlog
+                - time_phased_component_coverage,
             )
         )
 
@@ -92,4 +105,6 @@ class InventoryAgent:
             target_coverage_days=target_coverage_days,
             required_component_target=required_component_target,
             component_shortfall=component_shortfall,
+            time_phased_component_coverage=time_phased_component_coverage,
+            pipeline_due_within_target=pipeline_due_within_target,
         )

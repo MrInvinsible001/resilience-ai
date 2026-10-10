@@ -7,7 +7,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from resilience_ai import CoordinationResult, Coordinator
+from resilience_ai import (
+    ApprovalStatus,
+    CoordinatedStrategy,
+    CoordinationResult,
+    Coordinator,
+    PlannerApprovalWorkflow,
+)
 from resilience_ai.agents.demand import DemandAgent, DemandSignal
 from resilience_ai.agents.inventory import InventoryAgent, InventorySignal
 from resilience_ai.agents.logistics import LogisticsAgent, LogisticsSignal
@@ -328,3 +334,72 @@ def test_coordinator_injected_components_called_with_expected_inputs():
 
     assert result.decision == dummy_decision
     assert result.demand_signal == dummy_demand_sig
+
+
+def test_coordinator_reconciliation_uses_agent_signals_and_time_phased_inventory():
+    """A coordinated proposal fills an observed shortfall through ranked suppliers."""
+    obs = make_coordinator_test_observation(
+        in_transit=[
+            Shipment(
+                supplier_id="Supplier_Critical",
+                quantity=1000,
+                order_day=4,
+                arrival_day=30,
+            )
+        ]
+    )
+    coordinator = Coordinator(reconcile_signals=True)
+
+    result = coordinator.run(obs)
+
+    assert result.is_valid is True
+    assert result.approval_status is ApprovalStatus.PENDING
+    assert result.decision.orders
+    assert "time_phased_coverage=" in result.decision.rationale
+    assert all(
+        order.quantity <= obs.suppliers[order.supplier_id].current_daily_capacity
+        for order in result.decision.orders
+    )
+
+
+def test_coordinator_reconciliation_changes_an_empty_strategy_proposal():
+    """Agent signals materially affect a valid proposal rather than only annotating it."""
+
+    class EmptyStrategy:
+        def propose(self, observation: PlanningObservation) -> ProcurementDecision:
+            return ProcurementDecision(day=observation.day, orders=())
+
+    obs = make_coordinator_test_observation()
+    result = Coordinator(
+        strategy=EmptyStrategy(),
+        reconcile_signals=True,
+    ).run(obs)
+
+    assert result.decision.orders
+    assert "supplier_priority=" in result.decision.rationale
+
+
+def test_planner_approval_pending_approve_and_reject():
+    """Recommendations remain pending until an explicit planner action."""
+    workflow = PlannerApprovalWorkflow()
+    decision = ProcurementDecision(day=5, orders=())
+    record = workflow.submit(decision)
+
+    assert record.status is ApprovalStatus.PENDING
+    assert workflow.approve(5, "planner reviewed") is decision
+    assert workflow.get(5).status is ApprovalStatus.APPROVED
+
+    workflow.submit(ProcurementDecision(day=6, orders=()))
+    rejected = workflow.reject(6, "capacity risk")
+    assert rejected.status is ApprovalStatus.REJECTED
+
+
+def test_coordinated_strategy_approves_reconciled_decision_for_simulator():
+    """The simulator adapter explicitly approves, rather than silently assuming approval."""
+    obs = make_coordinator_test_observation()
+    strategy = CoordinatedStrategy()
+
+    decision = strategy.propose(obs)
+
+    assert decision.day == obs.day
+    assert strategy.coordinator.approval_workflow.get(obs.day).status is ApprovalStatus.APPROVED
