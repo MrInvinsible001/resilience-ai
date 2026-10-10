@@ -28,11 +28,14 @@ from resilience_ai.simulator import (
     simulate,
 )
 from resilience_ai.evaluation import BenchmarkReport, run_benchmark
+from resilience_ai.coordinator import CoordinationResult, Coordinator
 
 __all__ = [
     "BaselineReactiveStrategy",
     "BenchmarkReport",
     "ConstraintViolation",
+    "CoordinationResult",
+    "Coordinator",
     "DemandForecast",
     "DisruptionNotice",
     "InventoryState",
