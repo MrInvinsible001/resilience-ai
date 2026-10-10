@@ -17,8 +17,6 @@ from resilience_ai.simulator import (
     generate_daily_demands,
     run_burn_in,
 )
-
-
 StrategyFactory = Callable[[], Strategy]
 
 SUMMARY_COLUMNS = [
@@ -41,6 +39,8 @@ SUMMARY_COLUMNS = [
     "alternate_order_quantity",
     "accepted_order_quantity",
     "order_volatility",
+    "recommendation_stability",
+    "average_inventory_days",
     "total_constraint_violations",
     "capacity_violations",
     "accounting_invariants_pass",
@@ -67,6 +67,7 @@ TRAJECTORY_COLUMNS = [
     "purchase_cost_usd",
     "transport_cost_usd",
     "constraint_violation_count",
+    "inventory_days",
 ]
 
 AGGREGATE_METRICS = (
@@ -78,6 +79,8 @@ AGGREGATE_METRICS = (
     "recovery_time_days",
     "procurement_expenditure_usd",
     "total_constraint_violations",
+    "recommendation_stability",
+    "average_inventory_days",
 )
 
 AGGREGATE_COLUMNS = [
@@ -183,6 +186,12 @@ def _build_trajectory(
                 "purchase_cost_usd": step.purchase_cost,
                 "transport_cost_usd": step.transport_cost,
                 "constraint_violation_count": len(step.violations),
+                "inventory_days": (
+                    step.finished_inventory_end + step.components_end
+                )
+                / result.config.total_mean_demand
+                if result.config.total_mean_demand > 0
+                else 0.0,
             }
         )
     return rows
@@ -205,6 +214,11 @@ def _build_summary(
     volatility = sum(
         abs(current - previous)
         for previous, current in zip([0, *daily_orders], daily_orders)
+    )
+    transitions = list(zip([0, *daily_orders], daily_orders))
+    stable_transitions = sum(previous == current for previous, current in transitions)
+    recommendation_stability = (
+        stable_transitions / len(transitions) if transitions else 1.0
     )
     satisfied_units = max(0, total_demand - result.final_inventory.backlog)
     invariants = result.verify_invariants()
@@ -232,6 +246,12 @@ def _build_summary(
         ),
         "accepted_order_quantity": sum(daily_orders),
         "order_volatility": volatility,
+        "recommendation_stability": recommendation_stability,
+        "average_inventory_days": (
+            sum(float(row["inventory_days"]) for row in trajectory) / len(trajectory)
+            if trajectory
+            else 0.0
+        ),
         "total_constraint_violations": result.total_violations,
         "capacity_violations": sum(
             violation.code == ViolationCode.CAPACITY_EXCEEDED.value

@@ -46,6 +46,26 @@ The codebase is strictly decoupled across a shared contract boundary:
 * **Interactive Dashboard**: Visualizes inventory levels, cumulative stockouts, backlog spikes, and comparative multi-strategy metrics.
 * **Contract Compliance**: Ensures all strategies generate valid `ProcurementDecision` proposals satisfying daily capacity limits.
 
+### Coordinated Policy and Planner Approval
+The simulator-compatible `CoordinatedStrategy` adapter preserves the existing
+`Strategy` protocol while making the agent outputs operational:
+
+1. `Coordinator.run(observation)` executes Demand, Inventory, Supplier-Risk, and
+   Logistics agents.
+2. A valid base strategy proposal is reconciled using the demand-derived
+   inventory target, shipments arriving within the target window, and the
+   supplier-risk landed-cost ranking. Invalid base proposals are preserved and
+   reported rather than silently repaired.
+3. The reconciled recommendation is submitted to `PlannerApprovalWorkflow` as
+   `PENDING`.
+4. `CoordinatedStrategy` explicitly approves the recommendation for simulation
+   execution. External applications can call `Coordinator.approve(day)` or
+   `Coordinator.reject(day)` instead.
+
+The approval workflow is separate from strategy generation and physical
+shipment scheduling. A pending or rejected recommendation is not treated as
+approved.
+
 ---
 
 ## 2. The Shared Contract (`resilience_ai/contracts.py`)
@@ -176,4 +196,3 @@ The validator checks:
   - In `KNOWN_SHUTDOWN`, the disruption schedule is disclosed to strategies on Day 1 via `DisruptionNotice` and zeroed entries in `SupplierInfo.future_daily_capacities`.
   - In `SURPRISE_SHUTDOWN`, the disruption is concealed until Day 10. Prior to Day 10, observations contain no disruption notices and report full normal capacity ($220$) across all future days. On Day 10, the surprise notice is announced and future capacities reflect the shutdown.
   - In all scenarios, strategies receive only statistical demand forecasts, never future realized draws, strictly enforcing experimental fairness.
-

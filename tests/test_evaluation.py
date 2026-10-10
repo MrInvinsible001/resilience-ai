@@ -10,6 +10,8 @@ from resilience_ai.contracts import (
     ProcurementDecision,
     ScenarioMode,
 )
+from resilience_ai.coordinator import CoordinatedStrategy
+from resilience_ai.strategies.rule_based import RuleBasedStrategy
 from resilience_ai.evaluation import (
     AGGREGATE_COLUMNS,
     SUMMARY_COLUMNS,
@@ -140,6 +142,31 @@ def test_benchmark_cost_orders_volatility_violations_and_invariants():
     assert summary["total_constraint_violations"] == 0
     assert summary["capacity_violations"] == 0
     assert bool(summary["accounting_invariants_pass"])
+    assert 0.0 <= summary["recommendation_stability"] <= 1.0
+    assert summary["average_inventory_days"] >= 0.0
+
+
+def test_benchmark_can_compare_coordinated_policy_with_baselines_fairly():
+    """Coordinated policy and baselines share the same scenario trial inputs."""
+    report = run_benchmark(
+        {
+            "coordinated": CoordinatedStrategy,
+            "rule_based": RuleBasedStrategy,
+        },
+        SimulationConfig(horizon_days=3),
+        scenario_modes=(ScenarioMode.SURPRISE_SHUTDOWN,),
+        seeds=(42,),
+    )
+
+    assert set(report.summary["strategy"]) == {"coordinated", "rule_based"}
+    assert report.daily_trajectories.groupby("strategy").size().to_dict() == {
+        "coordinated": 3,
+        "rule_based": 3,
+    }
+    demand = report.daily_trajectories.pivot(
+        index="day", columns="strategy", values="realized_demand"
+    )
+    assert demand["coordinated"].equals(demand["rule_based"])
 
 
 def test_benchmark_records_capacity_violations():

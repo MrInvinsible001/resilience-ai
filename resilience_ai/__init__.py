@@ -28,19 +28,29 @@ from resilience_ai.simulator import (
     simulate,
 )
 from resilience_ai.evaluation import BenchmarkReport, run_benchmark
-from resilience_ai.coordinator import CoordinationResult, Coordinator
+from resilience_ai.coordinator import (
+    ApprovalStatus,
+    CoordinatedStrategy,
+    CoordinationResult,
+    Coordinator,
+    PlannerApproval,
+    PlannerApprovalWorkflow,
+)
 
 __all__ = [
     "BaselineReactiveStrategy",
     "BenchmarkReport",
     "ConstraintViolation",
     "CoordinationResult",
+    "CoordinatedStrategy",
     "Coordinator",
     "DemandForecast",
     "DisruptionNotice",
     "InventoryState",
     "OrderRequest",
     "PlanningObservation",
+    "PlannerApproval",
+    "PlannerApprovalWorkflow",
     "ProcurementDecision",
     "ScenarioMode",
     "Shipment",
@@ -49,6 +59,7 @@ __all__ = [
     "SimulationStepLog",
     "Simulator",
     "Strategy",
+    "ApprovalStatus",
     "SupplierInfo",
     "ViolationCode",
     "build_forecast",
