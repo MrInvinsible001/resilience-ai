@@ -10,4 +10,5 @@ build/
 *.sqlite3
 *.log
 data/
+test_*.txt
 

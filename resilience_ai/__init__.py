@@ -16,9 +16,12 @@ from resilience_ai.contracts import (
     is_valid_decision,
     validate_decision,
 )
+from resilience_ai.coordinator import CoordinationResult, Coordinator
 
 __all__ = [
     "ConstraintViolation",
+    "CoordinationResult",
+    "Coordinator",
     "DemandForecast",
     "DisruptionNotice",
     "InventoryState",
